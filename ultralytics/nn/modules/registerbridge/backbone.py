@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -38,13 +39,16 @@ class DualDINOv2RegBackbone(nn.Module):
 
         load_kwargs = {"attn_implementation": "sdpa", "local_files_only": local_files_only}
 
-        print("[RB-Backbone] loading RGB backbone")
-        self.rgb_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
+        print("[RB-Backbone] loading shared backbone", flush=True)
+        base_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
+        print("[RB-Backbone] shared backbone loaded", flush=True)
+
+        self.rgb_backbone = base_backbone
         for p in self.rgb_backbone.parameters():
             p.requires_grad = False
 
-        print("[RB-Backbone] loading X backbone")
-        self.x_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
+        print("[RB-Backbone] cloning X backbone", flush=True)
+        self.x_backbone = deepcopy(base_backbone)
         for p in self.x_backbone.parameters():
             p.requires_grad = False
 
