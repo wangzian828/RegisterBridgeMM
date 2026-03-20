@@ -33,6 +33,7 @@ class RegisterBridgeYOLO(nn.Module):
         prior_rounds: int = 1,
         dropout: float = 0.1,
         multi_scale_layers: tuple[int, ...] = (3, 6, 9, 11),
+        local_files_only: bool = False,
     ):
         super().__init__()
         self.x_channels = x_channels
@@ -43,6 +44,7 @@ class RegisterBridgeYOLO(nn.Module):
             lora_alpha=lora_alpha,
             multi_scale_layers=multi_scale_layers,
             x_channels=x_channels,
+            local_files_only=local_files_only,
         )
         backbone_dim = self.backbone.embed_dim
         self.bridge = RegisterBridge(
