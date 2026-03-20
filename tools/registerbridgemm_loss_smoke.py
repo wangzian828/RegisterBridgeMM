@@ -9,15 +9,17 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
+import yaml
 
-from ultralytics.models.registerbridgemm.model import RegisterBridgeMM
+from ultralytics.nn.tasks_registerbridge import RegisterBridgeDetectionModel
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
     cfg = root / "configs" / "registerbridgemm" / "registerbridge_yolo_dronevehicle.yaml"
     print("[1/6] Instantiate family entry")
-    model = RegisterBridgeMM(str(cfg), task="detect", verbose=False).model
+    cfg_dict = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    model = RegisterBridgeDetectionModel(cfg_dict, nc=cfg_dict["nc"], ch=cfg_dict["channels"], verbose=False)
     print("[2/6] Switch to train mode")
     model.train()
 
