@@ -1,0 +1,25 @@
+nc: 5
+channels: 6
+
+# Match reference multimodal dataset semantics.
+Xch: 3
+modality_used: ["rgb", "ir"]
+modalities:
+  rgb: images
+  ir: images_ir
+
+# Phase-1 RegisterBridgeMM-YOLO scaffold config.
+# Intended to be loaded explicitly in Python through the new RegisterBridgeMM family.
+
+registerbridge:
+  backbone: facebook/dinov2-with-registers-base
+  x_channels: 3
+  num_register_tokens: 4
+  lora_rank: 8
+  lora_alpha: 16
+  d_model: 256
+  n_heads: 8
+  n_points: 4
+  n_fusion_latents: 8
+  prior_rounds: 1
+  dropout: 0.1

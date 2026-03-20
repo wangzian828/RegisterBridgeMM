@@ -1,0 +1,1 @@
+"""RegisterBridge method modules namespace."""

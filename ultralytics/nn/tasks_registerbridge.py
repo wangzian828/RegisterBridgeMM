@@ -1,0 +1,87 @@
+"""RegisterBridge-specific model build entrypoints.
+
+This file intentionally stays separate from `ultralytics.nn.tasks` so the original
+reference project files remain untouched while we scaffold a new family.
+"""
+
+from __future__ import annotations
+
+import yaml
+from types import SimpleNamespace
+
+import torch
+import torch.nn as nn
+
+from ultralytics.nn.tasks import BaseModel
+from ultralytics.nn.modules.registerbridge.model import RegisterBridgeYOLO
+from ultralytics.utils.loss import v8DetectionLoss
+from ultralytics.utils.torch_utils import initialize_weights
+
+
+class _CriterionProxy(nn.Module):
+    """Minimal proxy that matches the attributes expected by v8DetectionLoss."""
+
+    def __init__(self, detect_head: nn.Module, args):
+        super().__init__()
+        self.model = nn.ModuleList([detect_head])
+        self.args = args
+
+
+class RegisterBridgeDetectionModel(BaseModel):
+    """Dedicated RegisterBridge detect model using a standalone build path."""
+
+    def __init__(self, cfg, nc=None, ch=None, verbose=True):
+        super().__init__()
+        if isinstance(cfg, (str, bytes)):
+            with open(cfg, "r", encoding="utf-8") as f:
+                self.yaml = yaml.safe_load(f)
+        else:
+            self.yaml = dict(cfg)
+        self.yaml["nc"] = nc or self.yaml.get("nc", 80)
+        self.yaml["channels"] = ch or self.yaml.get("channels", 6)
+        model_cfg = self.yaml.get("registerbridge", {})
+        self.model = RegisterBridgeYOLO(
+            nc=self.yaml["nc"],
+            backbone_name=model_cfg.get("backbone", "facebook/dinov2-with-registers-base"),
+            x_channels=model_cfg.get("x_channels", 3),
+            num_register_tokens=model_cfg.get("num_register_tokens", 4),
+            lora_rank=model_cfg.get("lora_rank", 8),
+            lora_alpha=model_cfg.get("lora_alpha", 16),
+            d_model=model_cfg.get("d_model", 256),
+            n_heads=model_cfg.get("n_heads", 8),
+            n_points=model_cfg.get("n_points", 4),
+            n_fusion_latents=model_cfg.get("n_fusion_latents", 8),
+            prior_rounds=model_cfg.get("prior_rounds", 1),
+            dropout=model_cfg.get("dropout", 0.1),
+        )
+        self.names = {i: f"class_{i}" for i in range(self.yaml["nc"])}
+        self.inplace = True
+        self.save = []
+        self._criterion_model = None
+        self.args = getattr(self, "args", SimpleNamespace(box=7.5, cls=0.5, dfl=1.5))
+        initialize_weights(self)
+        self._initialize_stride(ch or self.yaml["channels"])
+
+    def _initialize_stride(self, ch):
+        m = self.model.detect
+        s = 256
+        current_mode = self.training
+        self.model.train()
+        with torch.no_grad():
+            outputs = self.model(torch.zeros(1, ch, s, s))
+        m.stride = torch.tensor([s / x.shape[-2] for x in outputs])
+        self.stride = m.stride
+        if hasattr(m, "bias_init") and callable(getattr(m, "bias_init")):
+            m.bias_init()
+        self.model.train(current_mode)
+
+    def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
+        return self.model(x)
+
+    def init_criterion(self):
+        if self._criterion_model is None:
+            self._criterion_model = _CriterionProxy(self.model.detect, self.args)
+        return v8DetectionLoss(self._criterion_model)
+
+    def loss(self, batch, preds=None):
+        return super().loss(batch, preds)
