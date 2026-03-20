@@ -69,18 +69,11 @@ class RegisterBridgeDetectionModel(BaseModel):
 
     def _initialize_stride(self, ch):
         m = self.model.detect
-        s = 256
-        current_mode = self.training
-        self.model.train()
-        print("[RB-Task] stride init forward start")
-        with torch.no_grad():
-            outputs = self.model(torch.zeros(1, ch, s, s))
-        print("[RB-Task] stride init forward done")
-        m.stride = torch.tensor([s / x.shape[-2] for x in outputs])
+        patch = getattr(self.model.backbone, "patch_size", 14)
+        m.stride = torch.tensor([patch / 2.0, float(patch), float(patch) * 2.0])
         self.stride = m.stride
         if hasattr(m, "bias_init") and callable(getattr(m, "bias_init")):
             m.bias_init()
-        self.model.train(current_mode)
 
     def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
         return self.model(x)
