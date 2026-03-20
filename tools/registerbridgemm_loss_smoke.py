@@ -16,10 +16,13 @@ from ultralytics.models.registerbridgemm.model import RegisterBridgeMM
 def main():
     root = Path(__file__).resolve().parents[1]
     cfg = root / "configs" / "registerbridgemm" / "registerbridge_yolo_dronevehicle.yaml"
+    print("[1/6] Instantiate family entry")
     model = RegisterBridgeMM(str(cfg), task="detect", verbose=False).model
+    print("[2/6] Switch to train mode")
     model.train()
 
     bs = 2
+    print("[3/6] Build dummy batch")
     imgs = torch.zeros(bs, 6, 640, 640)
     batch = {
         "img": imgs,
@@ -34,7 +37,11 @@ def main():
             dtype=torch.float32,
         ),
     }
-    loss, items = model.loss(batch)
+    print("[4/6] Start forward")
+    preds = model(batch["img"])
+    print("[5/6] Forward done, start loss")
+    loss, items = model.loss(batch, preds)
+    print("[6/6] Loss done")
     print("loss:", loss)
     print("items:", items)
 
