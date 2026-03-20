@@ -97,3 +97,11 @@ RegisterBridgeMM(...)
 
 After YOLO detect is stable, add `RegisterBridgeMM-RTDETR` using the same family architecture,
 but only after Phase 1 proves the feature extractor and data integration are healthy.
+
+## Current Smoke Entrypoints
+
+- `tools/registerbridgemm_train_example.py`
+- `tools/registerbridgemm_smoke.py`
+- `tools/registerbridgemm_loss_smoke.py`
+- `tools/registerbridgemm_train_smoke.py`
+- `tools/registerbridgemm_val_smoke.py`
