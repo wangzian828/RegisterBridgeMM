@@ -47,6 +47,7 @@ class RegisterBridgeDetectionModel(BaseModel):
             num_register_tokens=model_cfg.get("num_register_tokens", 4),
             lora_rank=model_cfg.get("lora_rank", 8),
             lora_alpha=model_cfg.get("lora_alpha", 16),
+            local_files_only=model_cfg.get("local_files_only", False),
             d_model=model_cfg.get("d_model", 256),
             n_heads=model_cfg.get("n_heads", 8),
             n_points=model_cfg.get("n_points", 4),

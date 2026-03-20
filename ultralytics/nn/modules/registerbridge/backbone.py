@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
@@ -24,17 +26,21 @@ class DualDINOv2RegBackbone(nn.Module):
         lora_dropout: float = 0.0,
         multi_scale_layers: tuple[int, ...] = (3, 6, 9, 11),
         x_channels: int = 3,
+        local_files_only: bool = False,
     ):
         super().__init__()
         self.num_register_tokens = num_register_tokens
         self.multi_scale_layers = multi_scale_layers
         self.x_channels = x_channels
+        model_name = self._resolve_model_source(model_name)
 
-        self.rgb_backbone = AutoModel.from_pretrained(model_name, attn_implementation="sdpa")
+        load_kwargs = {"attn_implementation": "sdpa", "local_files_only": local_files_only}
+
+        self.rgb_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
         for p in self.rgb_backbone.parameters():
             p.requires_grad = False
 
-        self.x_backbone = AutoModel.from_pretrained(model_name, attn_implementation="sdpa")
+        self.x_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
         for p in self.x_backbone.parameters():
             p.requires_grad = False
 
@@ -70,6 +76,13 @@ class DualDINOv2RegBackbone(nn.Module):
         super().train(mode)
         self.rgb_backbone.eval()
         return self
+
+    @staticmethod
+    def _resolve_model_source(model_name: str) -> str:
+        candidate = Path(str(model_name)).expanduser()
+        if candidate.exists():
+            return str(candidate)
+        return model_name
 
     @staticmethod
     def _resolve_lora_targets(model: nn.Module) -> list[str]:
