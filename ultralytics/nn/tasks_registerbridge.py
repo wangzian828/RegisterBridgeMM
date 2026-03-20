@@ -32,6 +32,7 @@ class RegisterBridgeDetectionModel(BaseModel):
 
     def __init__(self, cfg, nc=None, ch=None, verbose=True):
         super().__init__()
+        print("[RB-Task] init start")
         if isinstance(cfg, (str, bytes)):
             with open(cfg, "r", encoding="utf-8") as f:
                 self.yaml = yaml.safe_load(f)
@@ -55,21 +56,26 @@ class RegisterBridgeDetectionModel(BaseModel):
             prior_rounds=model_cfg.get("prior_rounds", 1),
             dropout=model_cfg.get("dropout", 0.1),
         )
+        print("[RB-Task] model module built")
         self.names = {i: f"class_{i}" for i in range(self.yaml["nc"])}
         self.inplace = True
         self.save = []
         self._criterion_model = None
         self.args = getattr(self, "args", SimpleNamespace(box=7.5, cls=0.5, dfl=1.5))
         initialize_weights(self)
+        print("[RB-Task] weights initialized")
         self._initialize_stride(ch or self.yaml["channels"])
+        print("[RB-Task] stride initialized")
 
     def _initialize_stride(self, ch):
         m = self.model.detect
         s = 256
         current_mode = self.training
         self.model.train()
+        print("[RB-Task] stride init forward start")
         with torch.no_grad():
             outputs = self.model(torch.zeros(1, ch, s, s))
+        print("[RB-Task] stride init forward done")
         m.stride = torch.tensor([s / x.shape[-2] for x in outputs])
         self.stride = m.stride
         if hasattr(m, "bias_init") and callable(getattr(m, "bias_init")):

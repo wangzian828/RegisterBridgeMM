@@ -33,18 +33,23 @@ class DualDINOv2RegBackbone(nn.Module):
         self.multi_scale_layers = multi_scale_layers
         self.x_channels = x_channels
         model_name = self._resolve_model_source(model_name)
+        print(f"[RB-Backbone] model source: {model_name}")
+        print(f"[RB-Backbone] local_files_only={local_files_only}")
 
         load_kwargs = {"attn_implementation": "sdpa", "local_files_only": local_files_only}
 
+        print("[RB-Backbone] loading RGB backbone")
         self.rgb_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
         for p in self.rgb_backbone.parameters():
             p.requires_grad = False
 
+        print("[RB-Backbone] loading X backbone")
         self.x_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
         for p in self.x_backbone.parameters():
             p.requires_grad = False
 
         lora_targets = self._resolve_lora_targets(self.x_backbone)
+        print(f"[RB-Backbone] LoRA targets: {len(lora_targets)}")
         if lora_targets:
             lora_config = LoraConfig(
                 r=lora_rank,
@@ -54,6 +59,7 @@ class DualDINOv2RegBackbone(nn.Module):
                 bias="none",
             )
             self.x_backbone = get_peft_model(self.x_backbone, lora_config)
+            print("[RB-Backbone] LoRA attached")
 
         if x_channels != 3:
             self.x_input_adapter = nn.Conv2d(x_channels, 3, kernel_size=1, bias=True)
@@ -66,6 +72,7 @@ class DualDINOv2RegBackbone(nn.Module):
         self.rgb_backbone.eval()
         self.rgb_layers = self._resolve_encoder_layers(self.rgb_backbone)
         self.x_layers = self._resolve_encoder_layers(self.x_backbone)
+        print("[RB-Backbone] encoder layers resolved")
 
         mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1)
         std = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(1, 3, 1, 1)
