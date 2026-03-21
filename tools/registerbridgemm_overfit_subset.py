@@ -10,6 +10,7 @@ import argparse
 import random
 from pathlib import Path
 import sys
+from typing import Optional
 
 import yaml
 
@@ -31,7 +32,22 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--project", default="runs/registerbridgemm")
     parser.add_argument("--name", default="overfit_subset")
+    parser.add_argument("--backbone", default=None)
+    parser.add_argument("--local-files-only", action="store_true")
     return parser.parse_args()
+
+
+def build_model_cfg(model_path: str, output_dir: Path, backbone: Optional[str], local_files_only: bool) -> Path:
+    cfg_path = Path(model_path).resolve()
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    rb_cfg = cfg.setdefault("registerbridge", {})
+    if backbone is not None:
+        rb_cfg["backbone"] = backbone
+    if local_files_only:
+        rb_cfg["local_files_only"] = True
+    patched_cfg = (output_dir / "model_runtime.yaml").resolve()
+    patched_cfg.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return patched_cfg
 
 
 def resolve_entry(root: Path, value: str | list) -> list[Path]:
@@ -80,14 +96,16 @@ def main():
     subset_cfg["test"] = str(val_txt)
     subset_yaml = (temp_dir / "subset_data.yaml").resolve()
     subset_yaml.write_text(yaml.safe_dump(subset_cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    model_cfg = build_model_cfg(args.model, temp_dir, args.backbone, args.local_files_only)
 
     if args.imgsz % 28 != 0:
         print(f"Warning: imgsz={args.imgsz} is not divisible by 28; DINO patch/downsample geometry will use fractional YOLO strides.")
 
     print(f"Subset images: {len(subset)}")
     print(f"Subset yaml: {subset_yaml}")
+    print(f"Model yaml: {model_cfg}")
 
-    model = RegisterBridgeMM(args.model, task="detect", verbose=True)
+    model = RegisterBridgeMM(str(model_cfg), task="detect", verbose=True)
     model.train(
         data=str(subset_yaml),
         epochs=args.epochs,

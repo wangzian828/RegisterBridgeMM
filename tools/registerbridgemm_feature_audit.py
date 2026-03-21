@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+from typing import Optional, Union
 
 import torch
 import torch.nn.functional as F
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -20,6 +22,8 @@ def parse_args():
     parser.add_argument("--imgsz", type=int, default=672)
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--backbone", default=None)
+    parser.add_argument("--local-files-only", action="store_true")
     return parser.parse_args()
 
 
@@ -29,11 +33,23 @@ def cosine_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
     return F.cosine_similarity(a, b, dim=1).mean().item()
 
 
+def load_model_cfg(model_path: Union[str, Path], backbone: Optional[str], local_files_only: bool):
+    model_path = Path(model_path)
+    cfg = yaml.safe_load(model_path.read_text(encoding="utf-8"))
+    rb_cfg = cfg.setdefault("registerbridge", {})
+    if backbone is not None:
+        rb_cfg["backbone"] = backbone
+    if local_files_only:
+        rb_cfg["local_files_only"] = True
+    return cfg
+
+
 @torch.no_grad()
 def main():
     args = parse_args()
     device = torch.device(args.device)
-    model = RegisterBridgeDetectionModel(args.model, verbose=True).to(device)
+    model_cfg = load_model_cfg(args.model, args.backbone, args.local_files_only)
+    model = RegisterBridgeDetectionModel(model_cfg, verbose=True).to(device)
     model.eval()
 
     ch = int(model.yaml.get("channels", 6))
