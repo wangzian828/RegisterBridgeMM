@@ -32,3 +32,26 @@ class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
         if weights:
             model.load(weights)
         return model
+
+    def _preserve_registerbridge_freeze(self):
+        if self.model is None:
+            return
+        preserved = 0
+        for name, param in self.model.named_parameters():
+            should_freeze = False
+            if name.startswith("model.backbone.rgb_backbone"):
+                should_freeze = True
+            elif name.startswith("model.backbone.x_backbone"):
+                if "lora_" not in name:
+                    should_freeze = True
+            if should_freeze and param.requires_grad:
+                param.requires_grad = False
+                preserved += 1
+        if preserved and RANK in {-1, 0}:
+            from ultralytics.utils import LOGGER
+
+            LOGGER.info(f"RegisterBridgeMM: re-froze {preserved} backbone parameters after trainer setup")
+
+    def _setup_train(self, world_size):
+        super()._setup_train(world_size)
+        self._preserve_registerbridge_freeze()
