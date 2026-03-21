@@ -36,21 +36,19 @@ class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
     def _preserve_registerbridge_freeze(self):
         if self.model is None:
             return
+        intended_trainable = getattr(self.model, "_intended_trainable", None)
+        if intended_trainable is None:
+            return
         preserved = 0
         for name, param in self.model.named_parameters():
-            should_freeze = False
-            if name.startswith("model.backbone.rgb_backbone"):
-                should_freeze = True
-            elif name.startswith("model.backbone.x_backbone"):
-                if "lora_" not in name:
-                    should_freeze = True
-            if should_freeze and param.requires_grad:
-                param.requires_grad = False
+            should_train = name in intended_trainable
+            if param.requires_grad != should_train:
+                param.requires_grad = should_train
                 preserved += 1
         if preserved and RANK in {-1, 0}:
             from ultralytics.utils import LOGGER
 
-            LOGGER.info(f"RegisterBridgeMM: re-froze {preserved} backbone parameters after trainer setup")
+            LOGGER.info(f"RegisterBridgeMM: restored intended trainability for {preserved} parameters after trainer setup")
 
     def _setup_train(self, world_size):
         super()._setup_train(world_size)

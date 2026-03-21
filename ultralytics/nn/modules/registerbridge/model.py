@@ -35,6 +35,8 @@ class RegisterBridgeYOLO(nn.Module):
         multi_scale_layers: tuple[int, ...] = (3, 6, 9, 11),
         local_files_only: bool = False,
         fusion_type: str = "registerbridge",
+        rgb_unfreeze_last_n: int = 0,
+        x_unfreeze_last_n: int = 0,
     ):
         super().__init__()
         self.x_channels = x_channels
@@ -47,6 +49,8 @@ class RegisterBridgeYOLO(nn.Module):
             multi_scale_layers=multi_scale_layers,
             x_channels=x_channels,
             local_files_only=local_files_only,
+            rgb_unfreeze_last_n=rgb_unfreeze_last_n,
+            x_unfreeze_last_n=x_unfreeze_last_n,
         )
         backbone_dim = self.backbone.embed_dim
         self.bridge = RegisterBridge(

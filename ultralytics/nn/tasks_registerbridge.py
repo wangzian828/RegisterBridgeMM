@@ -50,6 +50,8 @@ class RegisterBridgeDetectionModel(BaseModel):
             lora_alpha=model_cfg.get("lora_alpha", 16),
             local_files_only=model_cfg.get("local_files_only", False),
             fusion_type=model_cfg.get("fusion_type", "registerbridge"),
+            rgb_unfreeze_last_n=model_cfg.get("rgb_unfreeze_last_n", 0),
+            x_unfreeze_last_n=model_cfg.get("x_unfreeze_last_n", 0),
             d_model=model_cfg.get("d_model", 256),
             n_heads=model_cfg.get("n_heads", 8),
             n_points=model_cfg.get("n_points", 4),
@@ -67,6 +69,7 @@ class RegisterBridgeDetectionModel(BaseModel):
         print("[RB-Task] weights initialized", flush=True)
         self._initialize_stride(ch or self.yaml["channels"])
         print("[RB-Task] stride initialized", flush=True)
+        self._intended_trainable = {name for name, p in self.named_parameters() if p.requires_grad}
 
     def _initialize_stride(self, ch):
         m = self.model.detect

@@ -28,6 +28,8 @@ class DualDINOv2RegBackbone(nn.Module):
         multi_scale_layers: tuple[int, ...] = (3, 6, 9, 11),
         x_channels: int = 3,
         local_files_only: bool = False,
+        rgb_unfreeze_last_n: int = 0,
+        x_unfreeze_last_n: int = 0,
     ):
         super().__init__()
         self.num_register_tokens = num_register_tokens
@@ -76,6 +78,8 @@ class DualDINOv2RegBackbone(nn.Module):
         self.rgb_backbone.eval()
         self.rgb_layers = self._resolve_encoder_layers(self.rgb_backbone)
         self.x_layers = self._resolve_encoder_layers(self.x_backbone)
+        self._unfreeze_last_layers(self.rgb_layers, rgb_unfreeze_last_n)
+        self._unfreeze_last_layers(self.x_layers, x_unfreeze_last_n)
         print("[RB-Backbone] encoder layers resolved", flush=True)
 
         mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1)
@@ -131,6 +135,14 @@ class DualDINOv2RegBackbone(nn.Module):
                 if isinstance(obj, nn.ModuleList):
                     return obj
         raise RuntimeError("Could not locate transformer encoder layers for backbone")
+
+    @staticmethod
+    def _unfreeze_last_layers(layers: nn.ModuleList, n: int):
+        if not n or n <= 0:
+            return
+        for layer in layers[-n:]:
+            for p in layer.parameters():
+                p.requires_grad = True
 
     def _extract_features(self, pixel_values: torch.Tensor, backbone: nn.Module, encoder_layers: nn.ModuleList):
         captured = {}
