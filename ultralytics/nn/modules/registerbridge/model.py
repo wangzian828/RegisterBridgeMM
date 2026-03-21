@@ -53,6 +53,9 @@ class RegisterBridgeYOLO(nn.Module):
             x_unfreeze_last_n=x_unfreeze_last_n,
         )
         backbone_dim = self.backbone.embed_dim
+        valid_fusion_types = {"registerbridge", "simple", "hybrid"}
+        if fusion_type not in valid_fusion_types:
+            raise ValueError(f"Unsupported fusion_type={fusion_type}. Expected one of {sorted(valid_fusion_types)}")
         self.bridge = RegisterBridge(
             embed_dim=backbone_dim,
             fusion_dim=d_model,
@@ -61,7 +64,7 @@ class RegisterBridgeYOLO(nn.Module):
             n_fusion_latents=n_fusion_latents,
             prior_rounds=prior_rounds,
             dropout=dropout,
-        ) if fusion_type == "registerbridge" else None
+        ) if fusion_type in {"registerbridge", "hybrid"} else None
         self.neck = RegisterBridgeFPN(in_dim=backbone_dim, out_dim=d_model, num_outs=3)
         self.detect = Detect(nc=nc, ch=(d_model, d_model, d_model))
         self._stride_initialized = False
@@ -103,12 +106,15 @@ class RegisterBridgeYOLO(nn.Module):
                 f"RegisterBridgeYOLO patch-token mismatch: expected {expected_tokens} tokens from "
                 f"grid {(h_patch, w_patch)}, got {rgb_patches.shape[1]}"
             )
-        if self.fusion_type == "registerbridge":
+        if self.fusion_type in {"registerbridge", "hybrid"}:
             fused_patches, prior = self.bridge(rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch))
             fused_ms = list(rgb_ms)
             fused_ms[-1] = fused_patches
             for i in range(len(fused_ms) - 1):
-                fused_ms[i] = self.bridge.fuse_shallow(rgb_ms[i], x_ms[i], prior)
+                if self.fusion_type == "registerbridge":
+                    fused_ms[i] = self.bridge.fuse_shallow(rgb_ms[i], x_ms[i], prior)
+                else:
+                    fused_ms[i] = 0.5 * (rgb_ms[i] + x_ms[i])
         else:
             fused_ms = [0.5 * (r + x) for r, x in zip(rgb_ms, x_ms)]
             fused_ms[-1] = 0.5 * (rgb_patches + x_patches)

@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--name", default="overfit_subset")
     parser.add_argument("--backbone", default=None)
     parser.add_argument("--local-files-only", action="store_true")
-    parser.add_argument("--fusion-type", choices=["registerbridge", "simple"], default=None)
+    parser.add_argument("--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None)
     parser.add_argument("--rgb-unfreeze-last-n", type=int, default=None)
     parser.add_argument("--x-unfreeze-last-n", type=int, default=None)
     return parser.parse_args()
