@@ -1,10 +1,10 @@
 from ultralytics.models.yolo.multimodal.train import MultiModalDetectionTrainer
 from ultralytics.nn.tasks_registerbridge import RegisterBridgeDetectionModel
 from ultralytics.utils import RANK
+from ultralytics.utils.torch_utils import de_parallel
 import ultralytics.engine.trainer as trainer_module
 from copy import copy
 from ultralytics.data.build import build_yolo_dataset
-from ultralytics.nn.tasks import de_parallel
 
 from .val import RegisterBridgeMMValidator
 
