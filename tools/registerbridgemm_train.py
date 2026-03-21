@@ -55,6 +55,7 @@ def build_model_cfg(
         rb_cfg["rgb_unfreeze_last_n"] = rgb_unfreeze_last_n
     if x_unfreeze_last_n is not None:
         rb_cfg["x_unfreeze_last_n"] = x_unfreeze_last_n
+    output_dir.mkdir(parents=True, exist_ok=True)
     patched_cfg = (output_dir / "model_runtime.yaml").resolve()
     patched_cfg.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return patched_cfg
@@ -62,11 +63,11 @@ def build_model_cfg(
 
 def main():
     args = parse_args()
-    run_dir = (Path(args.project) / args.name).resolve()
-    run_dir.mkdir(parents=True, exist_ok=True)
+    runtime_dir = (Path(args.project) / "_runtime_cfgs").resolve()
+    runtime_dir.mkdir(parents=True, exist_ok=True)
     model_cfg = build_model_cfg(
         args.model,
-        run_dir,
+        runtime_dir / args.name,
         args.backbone,
         args.local_files_only,
         args.fusion_type,
