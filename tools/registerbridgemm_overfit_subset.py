@@ -9,8 +9,11 @@ from __future__ import annotations
 import argparse
 import random
 from pathlib import Path
+import sys
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ultralytics.models.registerbridgemm.model import RegisterBridgeMM
 
