@@ -59,7 +59,6 @@ def build_validator(args):
     validator.stats = []
     dummy_model = SimpleNamespace(names=validator.names, stride=torch.tensor([32.0]), pt=True, jit=False, engine=False)
     validator.init_metrics(dummy_model)
-    validator.confusion_matrix = validator.metrics.confusion_matrix
     return validator
 
 
