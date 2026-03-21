@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+import socket
+import subprocess
 import sys
 from typing import Optional
 
@@ -12,6 +15,42 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ultralytics.models.registerbridgemm.model import RegisterBridgeMM
+
+
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def maybe_launch_ddp() -> None:
+    if "LOCAL_RANK" in os.environ:
+        return
+    device = None
+    for i, arg in enumerate(sys.argv[1:]):
+        if arg == "--device" and i + 2 <= len(sys.argv[1:]):
+            device = sys.argv[i + 2]
+            break
+        if arg.startswith("--device="):
+            device = arg.split("=", 1)[1]
+            break
+    if device is None or "," not in str(device):
+        return
+    nproc = len([x for x in str(device).split(",") if x.strip()])
+    port = find_free_port()
+    cmd = [
+        sys.executable,
+        "-m",
+        "torch.distributed.run",
+        "--nproc_per_node",
+        str(nproc),
+        "--master_port",
+        str(port),
+        str(Path(__file__).resolve()),
+        *sys.argv[1:],
+    ]
+    print(f"RegisterBridgeMM DDP launch: {' '.join(cmd)}", flush=True)
+    raise SystemExit(subprocess.run(cmd, check=False).returncode)
 
 
 def parse_args():
@@ -62,6 +101,7 @@ def build_model_cfg(
 
 
 def main():
+    maybe_launch_ddp()
     args = parse_args()
     runtime_dir = (Path(args.project) / "_runtime_cfgs").resolve()
     runtime_dir.mkdir(parents=True, exist_ok=True)
