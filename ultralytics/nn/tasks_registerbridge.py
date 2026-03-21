@@ -78,6 +78,17 @@ class RegisterBridgeDetectionModel(BaseModel):
     def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
         return self.model(x)
 
+    def _apply(self, fn):
+        self = super()._apply(fn)
+        m = self.model.detect
+        if hasattr(m, "stride") and m.stride is not None:
+            m.stride = fn(m.stride)
+        if hasattr(m, "anchors") and isinstance(m.anchors, torch.Tensor):
+            m.anchors = fn(m.anchors)
+        if hasattr(m, "strides") and isinstance(m.strides, torch.Tensor):
+            m.strides = fn(m.strides)
+        return self
+
     def init_criterion(self):
         if self._criterion_model is None:
             self._criterion_model = _CriterionProxy(self.model.detect, self.args)
