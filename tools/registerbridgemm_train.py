@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument("--device", default="0")
     parser.add_argument("--project", default="runs/registerbridgemm")
     parser.add_argument("--name", default="train_run")
+    parser.add_argument("--cache", choices=["false", "ram", "disk"], default="false")
     parser.add_argument("--backbone", default=None)
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument("--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None)
@@ -118,6 +119,7 @@ def main():
     print(f"Model yaml: {model_cfg}")
     if args.fusion_type is not None:
         print(f"Fusion type: {args.fusion_type}")
+    print(f"Cache mode: {args.cache}")
     if args.rgb_unfreeze_last_n is not None or args.x_unfreeze_last_n is not None:
         print(f"Unfreeze override: rgb={args.rgb_unfreeze_last_n} x={args.x_unfreeze_last_n}")
 
@@ -131,6 +133,7 @@ def main():
         device=args.device,
         project=args.project,
         name=args.name,
+        cache=False if args.cache == "false" else args.cache,
     )
 
 
