@@ -7,7 +7,7 @@ import ultralytics.engine.trainer as trainer_module
 class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
     """Thin trainer adapter for the RegisterBridgeMM detect family."""
 
-    ddp_find_unused_parameters = False
+    ddp_find_unused_parameters = True
 
     def __init__(self, cfg=None, overrides=None, _callbacks=None):
         super().__init__(cfg, overrides, _callbacks)
