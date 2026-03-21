@@ -24,6 +24,9 @@ def parse_args():
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--backbone", default=None)
     parser.add_argument("--local-files-only", action="store_true")
+    parser.add_argument("--fusion-type", choices=["registerbridge", "simple"], default=None)
+    parser.add_argument("--rgb-unfreeze-last-n", type=int, default=None)
+    parser.add_argument("--x-unfreeze-last-n", type=int, default=None)
     return parser.parse_args()
 
 
@@ -33,7 +36,14 @@ def cosine_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
     return F.cosine_similarity(a, b, dim=1).mean().item()
 
 
-def load_model_cfg(model_path: Union[str, Path], backbone: Optional[str], local_files_only: bool):
+def load_model_cfg(
+    model_path: Union[str, Path],
+    backbone: Optional[str],
+    local_files_only: bool,
+    fusion_type: Optional[str],
+    rgb_unfreeze_last_n: Optional[int],
+    x_unfreeze_last_n: Optional[int],
+):
     model_path = Path(model_path)
     cfg = yaml.safe_load(model_path.read_text(encoding="utf-8"))
     rb_cfg = cfg.setdefault("registerbridge", {})
@@ -41,6 +51,12 @@ def load_model_cfg(model_path: Union[str, Path], backbone: Optional[str], local_
         rb_cfg["backbone"] = backbone
     if local_files_only:
         rb_cfg["local_files_only"] = True
+    if fusion_type is not None:
+        rb_cfg["fusion_type"] = fusion_type
+    if rgb_unfreeze_last_n is not None:
+        rb_cfg["rgb_unfreeze_last_n"] = rgb_unfreeze_last_n
+    if x_unfreeze_last_n is not None:
+        rb_cfg["x_unfreeze_last_n"] = x_unfreeze_last_n
     return cfg
 
 
@@ -48,7 +64,14 @@ def load_model_cfg(model_path: Union[str, Path], backbone: Optional[str], local_
 def main():
     args = parse_args()
     device = torch.device(args.device)
-    model_cfg = load_model_cfg(args.model, args.backbone, args.local_files_only)
+    model_cfg = load_model_cfg(
+        args.model,
+        args.backbone,
+        args.local_files_only,
+        args.fusion_type,
+        args.rgb_unfreeze_last_n,
+        args.x_unfreeze_last_n,
+    )
     model = RegisterBridgeDetectionModel(model_cfg, verbose=True).to(device)
     model.eval()
 
@@ -78,6 +101,7 @@ def main():
     rb._update_detect_stride((rgb.shape[2], rgb.shape[3]), feats)
 
     print(f"input={(args.batch, ch, args.imgsz, args.imgsz)} patch_grid={(h_patch, w_patch)}")
+    print(f"fusion_type={rb.fusion_type}")
     print(f"detect_stride={rb.detect.stride.tolist()}")
     for i, feat in enumerate(feats, start=3):
         print(
