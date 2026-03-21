@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ultralytics.cfg import get_cfg
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.models.registerbridgemm.val import RegisterBridgeMMValidator
+from ultralytics.utils import ops
 
 
 def parse_args():
@@ -67,15 +68,23 @@ def make_gt_predictions(batch):
     batch_idx = batch["batch_idx"].view(-1)
     cls = batch["cls"].view(-1)
     bboxes = batch["bboxes"]
+    imgsz = batch["img"].shape[2:]
+    scale = torch.tensor([imgsz[1], imgsz[0], imgsz[1], imgsz[0]], device=bboxes.device, dtype=bboxes.dtype)
     for i in range(len(batch["im_file"])):
         mask = batch_idx == i
         if mask.any():
-            boxes = bboxes[mask].clone()
-            labels = cls[mask].float().view(-1, 1)
-            conf = torch.ones((boxes.shape[0], 1), device=boxes.device, dtype=boxes.dtype) * 0.999
-            preds.append(torch.cat([boxes, conf, labels], dim=1))
+            boxes = ops.xywh2xyxy(bboxes[mask].clone()) * scale
+            labels = cls[mask].float()
+            conf = torch.ones((boxes.shape[0],), device=boxes.device, dtype=boxes.dtype) * 0.999
+            preds.append({"bboxes": boxes, "conf": conf, "cls": labels})
         else:
-            preds.append(torch.zeros((0, 6), device=bboxes.device, dtype=bboxes.dtype))
+            preds.append(
+                {
+                    "bboxes": torch.zeros((0, 4), device=bboxes.device, dtype=bboxes.dtype),
+                    "conf": torch.zeros((0,), device=bboxes.device, dtype=bboxes.dtype),
+                    "cls": torch.zeros((0,), device=bboxes.device, dtype=bboxes.dtype),
+                }
+            )
     return preds
 
 
