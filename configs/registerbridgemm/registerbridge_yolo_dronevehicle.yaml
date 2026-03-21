@@ -14,6 +14,7 @@ modalities:
 registerbridge:
   backbone: facebook/dinov2-with-registers-base
   local_files_only: false
+  fusion_type: registerbridge
   x_channels: 3
   num_register_tokens: 4
   lora_rank: 8

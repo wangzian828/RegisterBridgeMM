@@ -34,9 +34,11 @@ class RegisterBridgeYOLO(nn.Module):
         dropout: float = 0.1,
         multi_scale_layers: tuple[int, ...] = (3, 6, 9, 11),
         local_files_only: bool = False,
+        fusion_type: str = "registerbridge",
     ):
         super().__init__()
         self.x_channels = x_channels
+        self.fusion_type = fusion_type
         self.backbone = DualDINOv2RegBackbone(
             model_name=backbone_name,
             num_register_tokens=num_register_tokens,
@@ -55,7 +57,7 @@ class RegisterBridgeYOLO(nn.Module):
             n_fusion_latents=n_fusion_latents,
             prior_rounds=prior_rounds,
             dropout=dropout,
-        )
+        ) if fusion_type == "registerbridge" else None
         self.neck = RegisterBridgeFPN(in_dim=backbone_dim, out_dim=d_model, num_outs=3)
         self.detect = Detect(nc=nc, ch=(d_model, d_model, d_model))
 
@@ -67,10 +69,14 @@ class RegisterBridgeYOLO(nn.Module):
         x_patches, x_regs, x_ms = x_out
         h_patch = rgb.shape[2] // self.backbone.patch_size
         w_patch = rgb.shape[3] // self.backbone.patch_size
-        fused_patches, prior = self.bridge(rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch))
-        fused_ms = list(rgb_ms)
-        fused_ms[-1] = fused_patches
-        for i in range(len(fused_ms) - 1):
-            fused_ms[i] = self.bridge.fuse_shallow(rgb_ms[i], x_ms[i], prior)
+        if self.fusion_type == "registerbridge":
+            fused_patches, prior = self.bridge(rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch))
+            fused_ms = list(rgb_ms)
+            fused_ms[-1] = fused_patches
+            for i in range(len(fused_ms) - 1):
+                fused_ms[i] = self.bridge.fuse_shallow(rgb_ms[i], x_ms[i], prior)
+        else:
+            fused_ms = [0.5 * (r + x) for r, x in zip(rgb_ms, x_ms)]
+            fused_ms[-1] = 0.5 * (rgb_patches + x_patches)
         feats = self.neck(fused_ms, (h_patch, w_patch))
         return self.detect(feats)
