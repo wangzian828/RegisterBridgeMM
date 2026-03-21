@@ -79,7 +79,7 @@ class RegisterBridgeDetectionModel(BaseModel):
         return self.model(x)
 
     def _apply(self, fn):
-        self = super()._apply(fn)
+        self = nn.Module._apply(self, fn)
         m = self.model.detect
         if hasattr(m, "stride") and m.stride is not None:
             m.stride = fn(m.stride)
