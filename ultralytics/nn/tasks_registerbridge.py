@@ -32,7 +32,7 @@ class RegisterBridgeDetectionModel(BaseModel):
 
     def __init__(self, cfg, nc=None, ch=None, verbose=True):
         super().__init__()
-        print("[RB-Task] init start")
+        print("[RB-Task] init start", flush=True)
         if isinstance(cfg, (str, bytes)):
             with open(cfg, "r", encoding="utf-8") as f:
                 self.yaml = yaml.safe_load(f)
@@ -56,16 +56,16 @@ class RegisterBridgeDetectionModel(BaseModel):
             prior_rounds=model_cfg.get("prior_rounds", 1),
             dropout=model_cfg.get("dropout", 0.1),
         )
-        print("[RB-Task] model module built")
+        print("[RB-Task] model module built", flush=True)
         self.names = {i: f"class_{i}" for i in range(self.yaml["nc"])}
         self.inplace = True
         self.save = []
         self._criterion_model = None
         self.args = getattr(self, "args", SimpleNamespace(box=7.5, cls=0.5, dfl=1.5))
         initialize_weights(self)
-        print("[RB-Task] weights initialized")
+        print("[RB-Task] weights initialized", flush=True)
         self._initialize_stride(ch or self.yaml["channels"])
-        print("[RB-Task] stride initialized")
+        print("[RB-Task] stride initialized", flush=True)
 
     def _initialize_stride(self, ch):
         m = self.model.detect
