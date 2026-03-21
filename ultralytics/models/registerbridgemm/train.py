@@ -2,6 +2,9 @@ from ultralytics.models.yolo.multimodal.train import MultiModalDetectionTrainer
 from ultralytics.nn.tasks_registerbridge import RegisterBridgeDetectionModel
 from ultralytics.utils import RANK
 import ultralytics.engine.trainer as trainer_module
+from copy import copy
+
+from .val import RegisterBridgeMMValidator
 
 
 class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
@@ -55,3 +58,12 @@ class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
     def _setup_train(self, world_size):
         super()._setup_train(world_size)
         self._preserve_registerbridge_freeze()
+
+    def get_validator(self):
+        self.loss_names = "box_loss", "cls_loss", "dfl_loss"
+        return RegisterBridgeMMValidator(
+            self.test_loader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
+        )
