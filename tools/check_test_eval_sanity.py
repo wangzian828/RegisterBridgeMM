@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 import torch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -56,7 +57,8 @@ def build_validator(args):
     validator.seen = 0
     validator.jdict = []
     validator.stats = []
-    validator.init_metrics(None)
+    dummy_model = SimpleNamespace(names=validator.names, stride=torch.tensor([32.0]), pt=True, jit=False, engine=False)
+    validator.init_metrics(dummy_model)
     validator.confusion_matrix = validator.metrics.confusion_matrix
     return validator
 
