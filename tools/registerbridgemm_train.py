@@ -1,0 +1,97 @@
+"""Standard training entry for RegisterBridgeMM."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+from typing import Optional
+
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ultralytics.models.registerbridgemm.model import RegisterBridgeMM
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train RegisterBridgeMM on a full dataset")
+    parser.add_argument("--model", default="configs/registerbridgemm/registerbridge_yolo_dronevehicle.yaml")
+    parser.add_argument("--data", required=True)
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--imgsz", type=int, default=672)
+    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--device", default="0")
+    parser.add_argument("--project", default="runs/registerbridgemm")
+    parser.add_argument("--name", default="train_run")
+    parser.add_argument("--backbone", default=None)
+    parser.add_argument("--local-files-only", action="store_true")
+    parser.add_argument("--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None)
+    parser.add_argument("--rgb-unfreeze-last-n", type=int, default=None)
+    parser.add_argument("--x-unfreeze-last-n", type=int, default=None)
+    return parser.parse_args()
+
+
+def build_model_cfg(
+    model_path: str,
+    output_dir: Path,
+    backbone: Optional[str],
+    local_files_only: bool,
+    fusion_type: Optional[str],
+    rgb_unfreeze_last_n: Optional[int],
+    x_unfreeze_last_n: Optional[int],
+) -> Path:
+    cfg_path = Path(model_path).resolve()
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    rb_cfg = cfg.setdefault("registerbridge", {})
+    if backbone is not None:
+        rb_cfg["backbone"] = backbone
+    if local_files_only:
+        rb_cfg["local_files_only"] = True
+    if fusion_type is not None:
+        rb_cfg["fusion_type"] = fusion_type
+    if rgb_unfreeze_last_n is not None:
+        rb_cfg["rgb_unfreeze_last_n"] = rgb_unfreeze_last_n
+    if x_unfreeze_last_n is not None:
+        rb_cfg["x_unfreeze_last_n"] = x_unfreeze_last_n
+    patched_cfg = (output_dir / "model_runtime.yaml").resolve()
+    patched_cfg.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return patched_cfg
+
+
+def main():
+    args = parse_args()
+    run_dir = (Path(args.project) / args.name).resolve()
+    run_dir.mkdir(parents=True, exist_ok=True)
+    model_cfg = build_model_cfg(
+        args.model,
+        run_dir,
+        args.backbone,
+        args.local_files_only,
+        args.fusion_type,
+        args.rgb_unfreeze_last_n,
+        args.x_unfreeze_last_n,
+    )
+
+    print(f"Model yaml: {model_cfg}")
+    if args.fusion_type is not None:
+        print(f"Fusion type: {args.fusion_type}")
+    if args.rgb_unfreeze_last_n is not None or args.x_unfreeze_last_n is not None:
+        print(f"Unfreeze override: rgb={args.rgb_unfreeze_last_n} x={args.x_unfreeze_last_n}")
+
+    model = RegisterBridgeMM(str(model_cfg), task="detect", verbose=True)
+    model.train(
+        data=args.data,
+        epochs=args.epochs,
+        imgsz=args.imgsz,
+        batch=args.batch,
+        workers=args.workers,
+        device=args.device,
+        project=args.project,
+        name=args.name,
+    )
+
+
+if __name__ == "__main__":
+    main()
