@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 from typing import Optional
+import warnings
 
 import yaml
 
@@ -65,6 +66,7 @@ def parse_args():
     parser.add_argument("--project", default="runs/registerbridgemm")
     parser.add_argument("--name", default="train_run")
     parser.add_argument("--cache", choices=["false", "ram", "disk"], default="false")
+    parser.add_argument("--deterministic", choices=["false", "true"], default="false")
     parser.add_argument("--backbone", default=None)
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument("--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None)
@@ -104,6 +106,9 @@ def build_model_cfg(
 def main():
     maybe_launch_ddp()
     args = parse_args()
+    warnings.filterwarnings("ignore", message="Flash Attention defaults to a non-deterministic algorithm.*")
+    warnings.filterwarnings("ignore", message="upsample_bicubic2d_aa_backward_out_cuda does not have a deterministic implementation.*")
+    warnings.filterwarnings("ignore", message="Grad strides do not match bucket view strides.*")
     runtime_dir = (Path(args.project) / "_runtime_cfgs").resolve()
     runtime_dir.mkdir(parents=True, exist_ok=True)
     model_cfg = build_model_cfg(
@@ -120,6 +125,7 @@ def main():
     if args.fusion_type is not None:
         print(f"Fusion type: {args.fusion_type}")
     print(f"Cache mode: {args.cache}")
+    print(f"Deterministic: {args.deterministic}")
     if args.rgb_unfreeze_last_n is not None or args.x_unfreeze_last_n is not None:
         print(f"Unfreeze override: rgb={args.rgb_unfreeze_last_n} x={args.x_unfreeze_last_n}")
 
@@ -134,6 +140,7 @@ def main():
         project=args.project,
         name=args.name,
         cache=False if args.cache == "false" else args.cache,
+        deterministic=args.deterministic == "true",
     )
 
 
