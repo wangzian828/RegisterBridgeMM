@@ -1,6 +1,7 @@
-"""Loss smoke test for RegisterBridgeMM.
+"""Minimal loss smoke for RegisterBridgeDetectionModel.
 
-Intended for later server-side verification once the environment has torch installed.
+This script intentionally mirrors the known-good interactive construction path,
+then adds forward/loss stages one by one.
 """
 
 from pathlib import Path
@@ -15,17 +16,19 @@ from ultralytics.nn.tasks_registerbridge import RegisterBridgeDetectionModel
 
 
 def main():
-    root = Path(__file__).resolve().parents[1]
-    cfg = root / "configs" / "registerbridgemm" / "registerbridge_yolo_dronevehicle.yaml"
-    print("[1/6] Instantiate family entry", flush=True)
-    cfg_dict = yaml.safe_load(cfg.read_text(encoding="utf-8"))
-    model = RegisterBridgeDetectionModel(cfg_dict, nc=cfg_dict["nc"], ch=cfg_dict["channels"], verbose=False)
-    print("[2/6] Switch to train mode", flush=True)
+    cfg_path = Path("configs/registerbridgemm/registerbridge_yolo_dronevehicle.yaml")
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+
+    print("[1/7] Load yaml", flush=True)
+    print("[2/7] Build task model", flush=True)
+    model = RegisterBridgeDetectionModel(cfg, nc=cfg["nc"], ch=cfg["channels"], verbose=False)
+
+    print("[3/7] Switch to train mode", flush=True)
     model.train()
 
     bs = 2
-    print("[3/6] Build dummy batch", flush=True)
-    imgs = torch.zeros(bs, 6, 256, 256)
+    print("[4/7] Build dummy batch", flush=True)
+    imgs = torch.zeros(bs, cfg["channels"], 256, 256)
     batch = {
         "img": imgs,
         "batch_idx": torch.tensor([0, 0, 1], dtype=torch.int64),
@@ -39,11 +42,12 @@ def main():
             dtype=torch.float32,
         ),
     }
-    print("[4/6] Start forward", flush=True)
+
+    print("[5/7] Start forward", flush=True)
     preds = model(batch["img"])
-    print("[5/6] Forward done, start loss", flush=True)
+    print("[6/7] Forward done, start loss", flush=True)
     loss, items = model.loss(batch, preds)
-    print("[6/6] Loss done", flush=True)
+    print("[7/7] Loss done", flush=True)
     print("loss:", loss)
     print("items:", items)
 
