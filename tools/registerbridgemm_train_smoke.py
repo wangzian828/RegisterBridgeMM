@@ -20,7 +20,7 @@ def main():
     data_cfg = root / "ultralytics" / "cfg" / "datasets" / "mmdata" / "obbmm.yaml"
 
     model = RegisterBridgeMM(str(model_cfg), task="detect", verbose=True)
-    model.train(data=str(data_cfg), epochs=1, imgsz=640, batch=2, workers=0, device=0)
+    model.train(data=str(data_cfg), epochs=1, imgsz=672, batch=2, workers=0, device=0)
 
 
 if __name__ == "__main__":

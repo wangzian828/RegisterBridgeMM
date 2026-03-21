@@ -64,6 +64,22 @@ class RegisterBridgeYOLO(nn.Module):
         ) if fusion_type == "registerbridge" else None
         self.neck = RegisterBridgeFPN(in_dim=backbone_dim, out_dim=d_model, num_outs=3)
         self.detect = Detect(nc=nc, ch=(d_model, d_model, d_model))
+        self._stride_initialized = False
+        self._warned_patch_alignment = False
+
+    def _update_detect_stride(self, input_hw: tuple[int, int], feats: list[torch.Tensor]):
+        input_h, input_w = input_hw
+        stride = feats[0].new_tensor([
+            0.5 * ((float(input_h) / float(feat.shape[-2])) + (float(input_w) / float(feat.shape[-1])))
+            for feat in feats
+        ])
+        if self.detect.stride.shape != stride.shape:
+            self.detect.stride = stride
+        else:
+            self.detect.stride.copy_(stride)
+        if not self._stride_initialized and hasattr(self.detect, "bias_init"):
+            self.detect.bias_init()
+            self._stride_initialized = True
 
     def forward(self, x: torch.Tensor):
         rgb = x[:, :3]
@@ -71,8 +87,22 @@ class RegisterBridgeYOLO(nn.Module):
         rgb_out, x_out = self.backbone(rgb, x_mod)
         rgb_patches, rgb_regs, rgb_ms = rgb_out
         x_patches, x_regs, x_ms = x_out
+        patch = self.backbone.patch_size
+        if not self._warned_patch_alignment and ((rgb.shape[2] % patch) or (rgb.shape[3] % patch)):
+            print(
+                f"[RB-Model] warning: input {(rgb.shape[2], rgb.shape[3])} is not divisible by patch_size={patch}; "
+                "feature geometry will be floor-rounded before YOLO head",
+                flush=True,
+            )
+            self._warned_patch_alignment = True
         h_patch = rgb.shape[2] // self.backbone.patch_size
         w_patch = rgb.shape[3] // self.backbone.patch_size
+        expected_tokens = h_patch * w_patch
+        if rgb_patches.shape[1] != expected_tokens:
+            raise RuntimeError(
+                f"RegisterBridgeYOLO patch-token mismatch: expected {expected_tokens} tokens from "
+                f"grid {(h_patch, w_patch)}, got {rgb_patches.shape[1]}"
+            )
         if self.fusion_type == "registerbridge":
             fused_patches, prior = self.bridge(rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch))
             fused_ms = list(rgb_ms)
@@ -83,4 +113,5 @@ class RegisterBridgeYOLO(nn.Module):
             fused_ms = [0.5 * (r + x) for r, x in zip(rgb_ms, x_ms)]
             fused_ms[-1] = 0.5 * (rgb_patches + x_patches)
         feats = self.neck(fused_ms, (h_patch, w_patch))
+        self._update_detect_stride((rgb.shape[2], rgb.shape[3]), feats)
         return self.detect(feats)

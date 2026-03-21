@@ -11,7 +11,6 @@ from types import SimpleNamespace
 
 import torch
 import torch.nn as nn
-
 from ultralytics.nn.tasks import BaseModel
 from ultralytics.nn.modules.registerbridge.model import RegisterBridgeYOLO
 from ultralytics.utils.loss import v8DetectionLoss
@@ -76,8 +75,6 @@ class RegisterBridgeDetectionModel(BaseModel):
         patch = getattr(self.model.backbone, "patch_size", 14)
         m.stride = torch.tensor([patch / 2.0, float(patch), float(patch) * 2.0])
         self.stride = m.stride
-        if hasattr(m, "bias_init") and callable(getattr(m, "bias_init")):
-            m.bias_init()
 
     def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
         return self.model(x)
@@ -99,4 +96,11 @@ class RegisterBridgeDetectionModel(BaseModel):
         return v8DetectionLoss(self._criterion_model)
 
     def loss(self, batch, preds=None):
-        return super().loss(batch, preds)
+        if preds is None:
+            preds = self.forward(batch["img"])
+        self.stride = self.model.detect.stride
+        if getattr(self, "criterion", None) is None:
+            self.criterion = self.init_criterion()
+        else:
+            self.criterion.stride = self.model.detect.stride
+        return self.criterion(preds, batch)

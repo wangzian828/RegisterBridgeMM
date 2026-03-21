@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument("--data", required=True)
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--imgsz", type=int, default=672)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--device", default="0")
@@ -80,6 +80,9 @@ def main():
     subset_cfg["test"] = str(val_txt)
     subset_yaml = (temp_dir / "subset_data.yaml").resolve()
     subset_yaml.write_text(yaml.safe_dump(subset_cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+    if args.imgsz % 28 != 0:
+        print(f"Warning: imgsz={args.imgsz} is not divisible by 28; DINO patch/downsample geometry will use fractional YOLO strides.")
 
     print(f"Subset images: {len(subset)}")
     print(f"Subset yaml: {subset_yaml}")
