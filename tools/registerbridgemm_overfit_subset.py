@@ -67,10 +67,10 @@ def main():
         rng.shuffle(subset)
         subset = sorted(subset[: args.samples])
 
-    temp_dir = Path("runs") / "registerbridgemm_subset"
+    temp_dir = (Path("runs") / "registerbridgemm_subset").resolve()
     temp_dir.mkdir(parents=True, exist_ok=True)
-    train_txt = temp_dir / "train_subset.txt"
-    val_txt = temp_dir / "val_subset.txt"
+    train_txt = (temp_dir / "train_subset.txt").resolve()
+    val_txt = (temp_dir / "val_subset.txt").resolve()
     train_txt.write_text("\n".join(str(p) for p in subset) + "\n", encoding="utf-8")
     val_txt.write_text(train_txt.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -78,7 +78,7 @@ def main():
     subset_cfg["train"] = str(train_txt)
     subset_cfg["val"] = str(val_txt)
     subset_cfg["test"] = str(val_txt)
-    subset_yaml = temp_dir / "subset_data.yaml"
+    subset_yaml = (temp_dir / "subset_data.yaml").resolve()
     subset_yaml.write_text(yaml.safe_dump(subset_cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
     print(f"Subset images: {len(subset)}")
