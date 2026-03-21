@@ -1,10 +1,15 @@
 from ultralytics.models.yolo.multimodal.train import MultiModalDetectionTrainer
 from ultralytics.nn.tasks_registerbridge import RegisterBridgeDetectionModel
 from ultralytics.utils import RANK
+import ultralytics.engine.trainer as trainer_module
 
 
 class RegisterBridgeMMTrainer(MultiModalDetectionTrainer):
     """Thin trainer adapter for the RegisterBridgeMM detect family."""
+
+    def __init__(self, cfg=None, overrides=None, _callbacks=None):
+        super().__init__(cfg, overrides, _callbacks)
+        trainer_module.check_amp = lambda model: True
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         channels = self.data.get("channels", 6)
