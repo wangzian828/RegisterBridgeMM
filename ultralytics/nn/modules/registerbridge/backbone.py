@@ -15,7 +15,7 @@ class DualDINOv2RegBackbone(nn.Module):
     """Dual-stream DINOv2-with-registers backbone.
 
     Returns per stream: (patch_tokens, register_tokens, multi_scale_features).
-    RGB stream is frozen. X stream is initialized the same way and adapted by LoRA.
+    RGB stream is frozen by default. X stream is initialized the same way and adapted by LoRA.
     """
 
     def __init__(
@@ -30,6 +30,7 @@ class DualDINOv2RegBackbone(nn.Module):
         local_files_only: bool = False,
         rgb_unfreeze_last_n: int = 0,
         x_unfreeze_last_n: int = 0,
+        rgb_lora: bool = False,
     ):
         super().__init__()
         self.num_register_tokens = num_register_tokens
@@ -39,7 +40,10 @@ class DualDINOv2RegBackbone(nn.Module):
         print(f"[RB-Backbone] model source: {model_name}", flush=True)
         print(f"[RB-Backbone] local_files_only={local_files_only}", flush=True)
 
-        load_kwargs = {"attn_implementation": "sdpa", "local_files_only": local_files_only}
+        load_kwargs = {
+            "attn_implementation": "sdpa",
+            "local_files_only": local_files_only,
+        }
 
         print("[RB-Backbone] loading shared backbone", flush=True)
         base_backbone = AutoModel.from_pretrained(model_name, **load_kwargs)
@@ -48,6 +52,20 @@ class DualDINOv2RegBackbone(nn.Module):
         self.rgb_backbone = base_backbone
         for p in self.rgb_backbone.parameters():
             p.requires_grad = False
+        rgb_lora_targets = self._resolve_lora_targets(self.rgb_backbone)
+        if rgb_lora and rgb_lora_targets:
+            rgb_lora_config = LoraConfig(
+                r=lora_rank,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                target_modules=rgb_lora_targets,
+                bias="none",
+            )
+            self.rgb_backbone = get_peft_model(self.rgb_backbone, rgb_lora_config)
+            print(
+                f"[RB-Backbone] RGB LoRA targets: {len(rgb_lora_targets)}", flush=True
+            )
+            print("[RB-Backbone] RGB LoRA attached", flush=True)
 
         print("[RB-Backbone] cloning X backbone", flush=True)
         self.x_backbone = deepcopy(base_backbone)
@@ -87,9 +105,14 @@ class DualDINOv2RegBackbone(nn.Module):
         self.register_buffer("pixel_mean", mean, persistent=False)
         self.register_buffer("pixel_std", std, persistent=False)
 
+    @staticmethod
+    def _has_trainable_params(module: nn.Module) -> bool:
+        return any(p.requires_grad for p in module.parameters())
+
     def train(self, mode=True):
         super().train(mode)
-        self.rgb_backbone.eval()
+        if not self._has_trainable_params(self.rgb_backbone):
+            self.rgb_backbone.eval()
         return self
 
     @staticmethod
@@ -103,7 +126,10 @@ class DualDINOv2RegBackbone(nn.Module):
     def _resolve_lora_targets(model: nn.Module) -> list[str]:
         targets = []
         for name, _ in model.named_modules():
-            if any(k in name for k in ("query", "key", "value", "qkv")) and name not in targets:
+            if (
+                any(k in name for k in ("query", "key", "value", "qkv"))
+                and name not in targets
+            ):
                 targets.append(name)
         return targets
 
@@ -124,7 +150,12 @@ class DualDINOv2RegBackbone(nn.Module):
 
     @classmethod
     def _resolve_encoder_layers(cls, model: nn.Module) -> nn.ModuleList:
-        candidate_paths = (("encoder", "layer"), ("encoder", "layers"), ("layer",), ("layers",))
+        candidate_paths = (
+            ("encoder", "layer"),
+            ("encoder", "layers"),
+            ("layer",),
+            ("layers",),
+        )
         for root in cls._iter_backbone_roots(model):
             for path in candidate_paths:
                 obj = root
@@ -144,17 +175,25 @@ class DualDINOv2RegBackbone(nn.Module):
             for p in layer.parameters():
                 p.requires_grad = True
 
-    def _extract_features(self, pixel_values: torch.Tensor, backbone: nn.Module, encoder_layers: nn.ModuleList):
+    def _extract_features(
+        self,
+        pixel_values: torch.Tensor,
+        backbone: nn.Module,
+        encoder_layers: nn.ModuleList,
+    ):
         captured = {}
         hooks = []
 
         def _make_hook(layer_idx: int):
             def _hook(_module, _inputs, output):
                 captured[layer_idx] = output[0] if isinstance(output, tuple) else output
+
             return _hook
 
         for layer_idx in sorted(set(self.multi_scale_layers)):
-            hooks.append(encoder_layers[layer_idx].register_forward_hook(_make_hook(layer_idx)))
+            hooks.append(
+                encoder_layers[layer_idx].register_forward_hook(_make_hook(layer_idx))
+            )
         try:
             outputs = backbone(pixel_values=pixel_values, output_hidden_states=False)
         finally:
@@ -163,9 +202,11 @@ class DualDINOv2RegBackbone(nn.Module):
 
         last_hidden = outputs.last_hidden_state
         k = self.num_register_tokens
-        reg_tokens = last_hidden[:, 1:1 + k, :]
-        patch_tokens = last_hidden[:, 1 + k:, :]
-        multi_scale = [captured[layer_idx][:, 1 + k:, :] for layer_idx in self.multi_scale_layers]
+        reg_tokens = last_hidden[:, 1 : 1 + k, :]
+        patch_tokens = last_hidden[:, 1 + k :, :]
+        multi_scale = [
+            captured[layer_idx][:, 1 + k :, :] for layer_idx in self.multi_scale_layers
+        ]
         return patch_tokens, reg_tokens, multi_scale
 
     @property
@@ -181,8 +222,17 @@ class DualDINOv2RegBackbone(nn.Module):
             x = self.x_input_adapter(x)
         rgb = (rgb - self.pixel_mean) / self.pixel_std
         x = (x - self.pixel_mean) / self.pixel_std
-        with torch.inference_mode():
+        if self._has_trainable_params(self.rgb_backbone):
             rgb_out = self._extract_features(rgb, self.rgb_backbone, self.rgb_layers)
-        rgb_out = (rgb_out[0].clone(), rgb_out[1].clone(), [t.clone() for t in rgb_out[2]])
+        else:
+            with torch.inference_mode():
+                rgb_out = self._extract_features(
+                    rgb, self.rgb_backbone, self.rgb_layers
+                )
+        rgb_out = (
+            rgb_out[0].clone(),
+            rgb_out[1].clone(),
+            [t.clone() for t in rgb_out[2]],
+        )
         x_out = self._extract_features(x, self.x_backbone, self.x_layers)
         return rgb_out, x_out

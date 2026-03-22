@@ -12,6 +12,7 @@ registerbridge:
   local_files_only: false
   fusion_type: registerbridge
   x_channels: 3
+  rgb_lora: false
   rgb_unfreeze_last_n: 0
   x_unfreeze_last_n: 0
   num_register_tokens: 4

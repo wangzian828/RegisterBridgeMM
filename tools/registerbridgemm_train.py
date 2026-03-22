@@ -55,8 +55,13 @@ def maybe_launch_ddp() -> None:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train RegisterBridgeMM on a full dataset")
-    parser.add_argument("--model", default="configs/registerbridgemm/registerbridge_yolo_dronevehicle.yaml")
+    parser = argparse.ArgumentParser(
+        description="Train RegisterBridgeMM on a full dataset"
+    )
+    parser.add_argument(
+        "--model",
+        default="configs/registerbridgemm/registerbridge_yolo_dronevehicle.yaml",
+    )
     parser.add_argument("--data", required=True)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--imgsz", type=int, default=672)
@@ -69,7 +74,10 @@ def parse_args():
     parser.add_argument("--deterministic", choices=["false", "true"], default="false")
     parser.add_argument("--backbone", default=None)
     parser.add_argument("--local-files-only", action="store_true")
-    parser.add_argument("--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None)
+    parser.add_argument(
+        "--fusion-type", choices=["registerbridge", "simple", "hybrid"], default=None
+    )
+    parser.add_argument("--rgb-lora", action="store_true")
     parser.add_argument("--rgb-unfreeze-last-n", type=int, default=None)
     parser.add_argument("--x-unfreeze-last-n", type=int, default=None)
     return parser.parse_args()
@@ -81,6 +89,7 @@ def build_model_cfg(
     backbone: Optional[str],
     local_files_only: bool,
     fusion_type: Optional[str],
+    rgb_lora: bool,
     rgb_unfreeze_last_n: Optional[int],
     x_unfreeze_last_n: Optional[int],
 ) -> Path:
@@ -93,22 +102,33 @@ def build_model_cfg(
         rb_cfg["local_files_only"] = True
     if fusion_type is not None:
         rb_cfg["fusion_type"] = fusion_type
+    if rgb_lora:
+        rb_cfg["rgb_lora"] = True
     if rgb_unfreeze_last_n is not None:
         rb_cfg["rgb_unfreeze_last_n"] = rgb_unfreeze_last_n
     if x_unfreeze_last_n is not None:
         rb_cfg["x_unfreeze_last_n"] = x_unfreeze_last_n
     output_dir.mkdir(parents=True, exist_ok=True)
     patched_cfg = (output_dir / "model_runtime.yaml").resolve()
-    patched_cfg.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    patched_cfg.write_text(
+        yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     return patched_cfg
 
 
 def main():
     maybe_launch_ddp()
     args = parse_args()
-    warnings.filterwarnings("ignore", message="Flash Attention defaults to a non-deterministic algorithm.*")
-    warnings.filterwarnings("ignore", message="upsample_bicubic2d_aa_backward_out_cuda does not have a deterministic implementation.*")
-    warnings.filterwarnings("ignore", message="Grad strides do not match bucket view strides.*")
+    warnings.filterwarnings(
+        "ignore", message="Flash Attention defaults to a non-deterministic algorithm.*"
+    )
+    warnings.filterwarnings(
+        "ignore",
+        message="upsample_bicubic2d_aa_backward_out_cuda does not have a deterministic implementation.*",
+    )
+    warnings.filterwarnings(
+        "ignore", message="Grad strides do not match bucket view strides.*"
+    )
     runtime_dir = (Path(args.project) / "_runtime_cfgs").resolve()
     runtime_dir.mkdir(parents=True, exist_ok=True)
     model_cfg = build_model_cfg(
@@ -117,6 +137,7 @@ def main():
         args.backbone,
         args.local_files_only,
         args.fusion_type,
+        args.rgb_lora,
         args.rgb_unfreeze_last_n,
         args.x_unfreeze_last_n,
     )
@@ -124,10 +145,13 @@ def main():
     print(f"Model yaml: {model_cfg}")
     if args.fusion_type is not None:
         print(f"Fusion type: {args.fusion_type}")
+    print(f"RGB LoRA: {args.rgb_lora}")
     print(f"Cache mode: {args.cache}")
     print(f"Deterministic: {args.deterministic}")
     if args.rgb_unfreeze_last_n is not None or args.x_unfreeze_last_n is not None:
-        print(f"Unfreeze override: rgb={args.rgb_unfreeze_last_n} x={args.x_unfreeze_last_n}")
+        print(
+            f"Unfreeze override: rgb={args.rgb_unfreeze_last_n} x={args.x_unfreeze_last_n}"
+        )
 
     model = RegisterBridgeMM(str(model_cfg), task="detect", verbose=True)
     model.train(

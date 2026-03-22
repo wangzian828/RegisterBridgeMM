@@ -42,7 +42,9 @@ class RegisterBridgeDetectionModel(BaseModel):
         model_cfg = self.yaml.get("registerbridge", {})
         self.model = RegisterBridgeYOLO(
             nc=self.yaml["nc"],
-            backbone_name=model_cfg.get("backbone", "facebook/dinov2-with-registers-base"),
+            backbone_name=model_cfg.get(
+                "backbone", "facebook/dinov2-with-registers-base"
+            ),
             x_channels=model_cfg.get("x_channels", 3),
             num_register_tokens=model_cfg.get("num_register_tokens", 4),
             lora_rank=model_cfg.get("lora_rank", 8),
@@ -51,6 +53,7 @@ class RegisterBridgeDetectionModel(BaseModel):
             fusion_type=model_cfg.get("fusion_type", "registerbridge"),
             rgb_unfreeze_last_n=model_cfg.get("rgb_unfreeze_last_n", 0),
             x_unfreeze_last_n=model_cfg.get("x_unfreeze_last_n", 0),
+            rgb_lora=model_cfg.get("rgb_lora", False),
             d_model=model_cfg.get("d_model", 256),
             n_heads=model_cfg.get("n_heads", 8),
             n_points=model_cfg.get("n_points", 4),
@@ -68,7 +71,9 @@ class RegisterBridgeDetectionModel(BaseModel):
         print("[RB-Task] weights initialized", flush=True)
         self._initialize_stride(ch or self.yaml["channels"])
         print("[RB-Task] stride initialized", flush=True)
-        self._intended_trainable = {name for name, p in self.named_parameters() if p.requires_grad}
+        self._intended_trainable = {
+            name for name, p in self.named_parameters() if p.requires_grad
+        }
 
     def _initialize_stride(self, ch):
         m = self.model.detect

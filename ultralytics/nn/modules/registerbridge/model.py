@@ -37,6 +37,7 @@ class RegisterBridgeYOLO(nn.Module):
         fusion_type: str = "registerbridge",
         rgb_unfreeze_last_n: int = 0,
         x_unfreeze_last_n: int = 0,
+        rgb_lora: bool = False,
     ):
         super().__init__()
         self.x_channels = x_channels
@@ -51,31 +52,46 @@ class RegisterBridgeYOLO(nn.Module):
             local_files_only=local_files_only,
             rgb_unfreeze_last_n=rgb_unfreeze_last_n,
             x_unfreeze_last_n=x_unfreeze_last_n,
+            rgb_lora=rgb_lora,
         )
         backbone_dim = self.backbone.embed_dim
         valid_fusion_types = {"registerbridge", "simple", "hybrid"}
         if fusion_type not in valid_fusion_types:
-            raise ValueError(f"Unsupported fusion_type={fusion_type}. Expected one of {sorted(valid_fusion_types)}")
-        self.bridge = RegisterBridge(
-            embed_dim=backbone_dim,
-            fusion_dim=d_model,
-            n_heads=n_heads,
-            n_points=n_points,
-            n_fusion_latents=n_fusion_latents,
-            prior_rounds=prior_rounds,
-            dropout=dropout,
-        ) if fusion_type in {"registerbridge", "hybrid"} else None
+            raise ValueError(
+                f"Unsupported fusion_type={fusion_type}. Expected one of {sorted(valid_fusion_types)}"
+            )
+        self.bridge = (
+            RegisterBridge(
+                embed_dim=backbone_dim,
+                fusion_dim=d_model,
+                n_heads=n_heads,
+                n_points=n_points,
+                n_fusion_latents=n_fusion_latents,
+                prior_rounds=prior_rounds,
+                dropout=dropout,
+            )
+            if fusion_type in {"registerbridge", "hybrid"}
+            else None
+        )
         self.neck = RegisterBridgeFPN(in_dim=backbone_dim, out_dim=d_model, num_outs=3)
         self.detect = Detect(nc=nc, ch=(d_model, d_model, d_model))
         self._stride_initialized = False
         self._warned_patch_alignment = False
 
-    def _update_detect_stride(self, input_hw: tuple[int, int], feats: list[torch.Tensor]):
+    def _update_detect_stride(
+        self, input_hw: tuple[int, int], feats: list[torch.Tensor]
+    ):
         input_h, input_w = input_hw
-        stride = feats[0].new_tensor([
-            0.5 * ((float(input_h) / float(feat.shape[-2])) + (float(input_w) / float(feat.shape[-1])))
-            for feat in feats
-        ])
+        stride = feats[0].new_tensor(
+            [
+                0.5
+                * (
+                    (float(input_h) / float(feat.shape[-2]))
+                    + (float(input_w) / float(feat.shape[-1]))
+                )
+                for feat in feats
+            ]
+        )
         if self.detect.stride.shape != stride.shape:
             self.detect.stride = stride
         else:
@@ -86,12 +102,14 @@ class RegisterBridgeYOLO(nn.Module):
 
     def forward(self, x: torch.Tensor):
         rgb = x[:, :3]
-        x_mod = x[:, 3:3 + self.x_channels]
+        x_mod = x[:, 3 : 3 + self.x_channels]
         rgb_out, x_out = self.backbone(rgb, x_mod)
         rgb_patches, rgb_regs, rgb_ms = rgb_out
         x_patches, x_regs, x_ms = x_out
         patch = self.backbone.patch_size
-        if not self._warned_patch_alignment and ((rgb.shape[2] % patch) or (rgb.shape[3] % patch)):
+        if not self._warned_patch_alignment and (
+            (rgb.shape[2] % patch) or (rgb.shape[3] % patch)
+        ):
             print(
                 f"[RB-Model] warning: input {(rgb.shape[2], rgb.shape[3])} is not divisible by patch_size={patch}; "
                 "feature geometry will be floor-rounded before YOLO head",
@@ -107,7 +125,9 @@ class RegisterBridgeYOLO(nn.Module):
                 f"grid {(h_patch, w_patch)}, got {rgb_patches.shape[1]}"
             )
         if self.fusion_type in {"registerbridge", "hybrid"}:
-            fused_patches, prior = self.bridge(rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch))
+            fused_patches, prior = self.bridge(
+                rgb_patches, x_patches, rgb_regs, x_regs, (h_patch, w_patch)
+            )
             fused_ms = list(rgb_ms)
             fused_ms[-1] = fused_patches
             for i in range(len(fused_ms) - 1):
