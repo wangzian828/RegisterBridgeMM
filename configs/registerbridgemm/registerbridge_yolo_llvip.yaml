@@ -1,0 +1,25 @@
+nc: 1
+channels: 6
+
+Xch: 3
+modality_used: ["rgb", "ir"]
+modalities:
+  rgb: images
+  ir: images_ir
+
+registerbridge:
+  backbone: facebook/dinov2-with-registers-base
+  local_files_only: false
+  fusion_type: registerbridge
+  x_channels: 3
+  rgb_unfreeze_last_n: 0
+  x_unfreeze_last_n: 0
+  num_register_tokens: 4
+  lora_rank: 8
+  lora_alpha: 16
+  d_model: 256
+  n_heads: 8
+  n_points: 4
+  n_fusion_latents: 8
+  prior_rounds: 1
+  dropout: 0.1
