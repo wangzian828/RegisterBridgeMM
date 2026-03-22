@@ -52,6 +52,12 @@ class DualDINOv2RegBackbone(nn.Module):
         self.rgb_backbone = base_backbone
         for p in self.rgb_backbone.parameters():
             p.requires_grad = False
+
+        print("[RB-Backbone] cloning X backbone", flush=True)
+        self.x_backbone = deepcopy(base_backbone)
+        for p in self.x_backbone.parameters():
+            p.requires_grad = False
+
         rgb_lora_targets = self._resolve_lora_targets(self.rgb_backbone)
         if rgb_lora and rgb_lora_targets:
             rgb_lora_config = LoraConfig(
@@ -66,11 +72,6 @@ class DualDINOv2RegBackbone(nn.Module):
                 f"[RB-Backbone] RGB LoRA targets: {len(rgb_lora_targets)}", flush=True
             )
             print("[RB-Backbone] RGB LoRA attached", flush=True)
-
-        print("[RB-Backbone] cloning X backbone", flush=True)
-        self.x_backbone = deepcopy(base_backbone)
-        for p in self.x_backbone.parameters():
-            p.requires_grad = False
 
         lora_targets = self._resolve_lora_targets(self.x_backbone)
         print(f"[RB-Backbone] LoRA targets: {len(lora_targets)}", flush=True)
